@@ -122,7 +122,6 @@ python servers/tools_server/app.py
 
 ```# Python MCP Complete Directory Structure
 
-```
 python-mcp/
 │
 ├── README.md                        # Project overview and documentation

@@ -29,40 +29,66 @@ class SSEClient:
         self.thread.daemon = True
         self.thread.start()
 
+    # Fix for client/sse_client.py
+    # Replace the _listen method with this implementation
+
     def _listen(self):
         """Listen for SSE events."""
         try:
-            headers = {'Accept': 'text/event-stream'}
-            with requests.get(self.url, headers=headers, stream=True) as response:
-                if response.status_code != 200:
-                    logger.error(f'Failed to connect to SSE endpoint: {response.status_code}')
-                    self._notify_listeners('error', {'error': f'HTTP error: {response.status_code}'})
-                    return
+            headers = {'Accept': 'text/event-stream', 'Cache-Control': 'no-cache'}
 
-                self.connected = True
-                self._notify_listeners('connection', {'status': 'connected'})
+            # Set up the connection with a timeout
+            session = requests.Session()
+            response = session.get(self.url, headers=headers, stream=True, timeout=60)
 
-                buffer = ""
-                for line in response.iter_lines(decode_unicode=True):
-                    if not self.running:
-                        break
+            if response.status_code != 200:
+                logger.error(f'Failed to connect to SSE endpoint: {response.status_code}')
+                self._notify_listeners('error', {'error': f'HTTP error: {response.status_code}'})
+                return
 
-                    if line:
-                        if line.startswith('data:'):
-                            data = line[5:].strip()
-                            try:
-                                data_json = json.loads(data)
-                                self._notify_listeners('message', data_json)
+            self.connected = True
+            self._notify_listeners('connection', {'status': 'connected'})
 
-                                # Also notify type-specific listeners
-                                if 'type' in data_json:
-                                    self._notify_listeners(data_json['type'], data_json)
-                            except json.JSONDecodeError:
-                                logger.error('Error parsing SSE message', {'data': data})
-                                self._notify_listeners('error', {'error': 'JSON parse error', 'data': data})
-        except Exception as e:
+            # Create a buffer for incomplete lines
+            buffer = ""
+
+            # Process the event stream
+            for line in response.iter_lines(decode_unicode=True):
+                if not self.running:
+                    break
+
+                if line:
+                    if line.startswith('data:'):
+                        data = line[5:].strip()
+                        try:
+                            data_json = json.loads(data)
+
+                            # Log only non-ping messages to avoid cluttering logs
+                            if data_json.get('type') != 'ping':
+                                logger.debug(f"Received SSE event: {data_json.get('type')}")
+
+                            self._notify_listeners('message', data_json)
+
+                            # Also notify type-specific listeners
+                            if 'type' in data_json:
+                                self._notify_listeners(data_json['type'], data_json)
+                        except json.JSONDecodeError:
+                            logger.error('Error parsing SSE message', {'data': data})
+                            self._notify_listeners('error', {'error': 'JSON parse error', 'data': data})
+        except requests.exceptions.Timeout:
+            logger.warning('SSE connection timed out, will reconnect')
+            self.connected = False
+            self._notify_listeners('connection', {'status': 'disconnected', 'reason': 'timeout'})
+        except requests.exceptions.RequestException as e:
             logger.error(f'SSE connection error: {str(e)}')
             self._notify_listeners('error', {'error': str(e)})
+            self.connected = False
+            self._notify_listeners('connection', {'status': 'disconnected', 'reason': 'error'})
+        except Exception as e:
+            logger.error(f'Unexpected error in SSE connection: {str(e)}')
+            self._notify_listeners('error', {'error': str(e)})
+            self.connected = False
+            self._notify_listeners('connection', {'status': 'disconnected', 'reason': 'unexpected'})
         finally:
             self.connected = False
             self._notify_listeners('connection', {'status': 'disconnected'})
