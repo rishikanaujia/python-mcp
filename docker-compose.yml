@@ -1,0 +1,157 @@
+version: '3.8'
+
+services:
+  # MCP Client
+  mcp-client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    environment:
+      - PORT=8080
+      - SERVER_URL=http://session-manager:5000
+      - CLIENT_ID=main-client
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./client:/app
+    depends_on:
+      - session-manager
+
+  # Session Manager
+  session-manager:
+    build:
+      context: .
+      dockerfile: session_manager/Dockerfile
+    environment:
+      - PORT=5000
+      - SERVER_1_URL=http://resources-server:5001
+      - SERVER_2_URL=http://sampling-server:5002
+      - SERVER_3_URL=http://tools-server:5003
+      - SERVER_4_URL=http://database-server:5004
+      - SERVER_5_URL=http://internet-server:5005
+      - SERVER_6_URL=http://roots-server:5006
+      - SERVER_7_URL=http://prompts-server:5007
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./session_manager:/app
+    depends_on:
+      - resources-server
+      - sampling-server
+      - tools-server
+      - database-server
+      - internet-server
+      - roots-server
+      - prompts-server
+
+  # MCP Servers
+  resources-server:
+    build:
+      context: .
+      dockerfile: servers/resources_server/Dockerfile
+    environment:
+      - PORT=5001
+      - SERVER_ID=1
+      - CAPABILITIES=resources
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./servers/resources_server:/app
+
+  sampling-server:
+    build:
+      context: .
+      dockerfile: servers/sampling_server/Dockerfile
+    environment:
+      - PORT=5002
+      - SERVER_ID=2
+      - CAPABILITIES=sampling
+    ports:
+      - "5002:5002"
+    volumes:
+      - ./servers/sampling_server:/app
+
+  tools-server:
+    build:
+      context: .
+      dockerfile: servers/tools_server/Dockerfile
+    environment:
+      - PORT=5003
+      - SERVER_ID=3
+      - CAPABILITIES=tools,database,api
+    ports:
+      - "5003:5003"
+    volumes:
+      - ./servers/tools_server:/app
+    depends_on:
+      - database
+
+  database-server:
+    build:
+      context: .
+      dockerfile: servers/database_server/Dockerfile
+    environment:
+      - PORT=5004
+      - SERVER_ID=4
+      - CAPABILITIES=database
+      - DATABASE_URL=postgresql://postgres:postgres@database:5432/mcpdb
+    ports:
+      - "5004:5004"
+    volumes:
+      - ./servers/database_server:/app
+    depends_on:
+      - database
+
+  internet-server:
+    build:
+      context: .
+      dockerfile: servers/internet_server/Dockerfile
+    environment:
+      - PORT=5005
+      - SERVER_ID=5
+      - CAPABILITIES=internet
+    ports:
+      - "5005:5005"
+    volumes:
+      - ./servers/internet_server:/app
+
+  roots-server:
+    build:
+      context: .
+      dockerfile: servers/roots_server/Dockerfile
+    environment:
+      - PORT=5006
+      - SERVER_ID=6
+      - CAPABILITIES=roots
+    ports:
+      - "5006:5006"
+    volumes:
+      - ./servers/roots_server:/app
+
+  prompts-server:
+    build:
+      context: .
+      dockerfile: servers/prompts_server/Dockerfile
+    environment:
+      - PORT=5007
+      - SERVER_ID=7
+      - CAPABILITIES=prompts
+    ports:
+      - "5007:5007"
+    volumes:
+      - ./servers/prompts_server:/app
+
+  # Database for MCP servers
+  database:
+    image: postgres:14
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=mcpdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
