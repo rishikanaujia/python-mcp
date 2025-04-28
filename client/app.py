@@ -19,7 +19,7 @@ from sse_client import SSEClient
 logger = MCPLogger(service_name='mcp-client')
 
 # Create Flask app
-app = Flask(__name__, static_folder='static')
+app = Flask(__name__, static_folder='static', template_folder='templates')
 
 # Configuration
 PORT = int(os.environ.get('PORT', 8080))
@@ -34,7 +34,6 @@ sse_client = SSEClient(f"{SERVER_URL}/events/{CLIENT_ID}")
 # Connection state
 connection_state = 'disconnected'
 session_id = None
-
 
 # Initialize MCP Client
 @app.route('/initialize', methods=['POST'])
@@ -73,7 +72,6 @@ def initialize():
         logger.error(f'Failed to initialize MCP Client: {str(e)}')
         return jsonify({'success': False, 'error': str(e)}), 500
 
-
 # Process a request through the MCP
 def process_request(request_type, payload):
     global connection_state, session_id
@@ -101,7 +99,6 @@ def process_request(request_type, payload):
 
     return response.json()
 
-
 # Process an LLM prompt
 @app.route('/process', methods=['POST'])
 def process_prompt():
@@ -127,7 +124,6 @@ def process_prompt():
         logger.error(f'Processing error: {str(e)}')
         return jsonify({'error': str(e)}), 500
 
-
 # Execute a tool
 @app.route('/tools', methods=['POST'])
 def execute_tool():
@@ -151,7 +147,6 @@ def execute_tool():
     except Exception as e:
         logger.error(f'Tool execution error: {str(e)}')
         return jsonify({'error': str(e)}), 500
-
 
 # Terminate client
 @app.route('/terminate', methods=['POST'])
@@ -182,7 +177,6 @@ def terminate():
         logger.error(f'Failed to terminate MCP Client: {str(e)}')
         return jsonify({'success': False, 'error': str(e)}), 500
 
-
 # Get client status
 @app.route('/status', methods=['GET'])
 def get_status():
@@ -193,12 +187,10 @@ def get_status():
         'llmStatus': llm.get_status()
     })
 
-
 # Serve the main page
 @app.route('/')
 def index():
     return render_template('index.html')
-
 
 # Start the server
 if __name__ == '__main__':

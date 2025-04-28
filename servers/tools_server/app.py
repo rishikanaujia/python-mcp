@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify
 import json
 import os
 import sys
-import importlib.util
 from datetime import datetime
 
 # Add parent directory to path for imports
@@ -40,7 +39,6 @@ tools = {
     'textProcessor': text_processor,
     'dataTransformer': data_transformer
 }
-
 
 # Process request endpoint
 @app.route('/process', methods=['POST'])
@@ -133,7 +131,7 @@ def process_request():
                 response = MCPProtocol.create_response(
                     request_data.get('id'),
                     'success',
-                    {'result': api_response.json()},
+                    {'result': api_response.json() if api_response.content else None},
                     source=f"mcp-server-{SERVER_ID}"
                 )
 
@@ -158,7 +156,6 @@ def process_request():
 
         return jsonify(error_response), 500
 
-
 # Health check endpoint
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -168,7 +165,6 @@ def health_check():
         'capabilities': CAPABILITIES,
         'timestamp': datetime.utcnow().isoformat()
     })
-
 
 # Start the server
 if __name__ == '__main__':

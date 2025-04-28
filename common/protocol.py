@@ -2,7 +2,6 @@ import uuid
 import json
 from datetime import datetime
 
-
 class MCPProtocol:
     """MCP Protocol implementation for creating and validating messages."""
 
