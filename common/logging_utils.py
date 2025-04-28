@@ -3,7 +3,6 @@ import logging
 from datetime import datetime
 import os
 
-
 class MCPLogger:
     """Logging utilities for MCP."""
 

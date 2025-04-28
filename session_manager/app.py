@@ -42,7 +42,6 @@ sessions = {}
 # SSE clients for notifications
 sse_clients = {}
 
-
 # SESSION MANAGEMENT ENDPOINTS
 
 # Create a new session
@@ -66,7 +65,6 @@ def create_session():
     logger.info(f"Session {session_id} created for client {client_id}")
     return jsonify({'sessionId': session_id}), 201
 
-
 # Get session information
 @app.route('/sessions/<session_id>', methods=['GET'])
 def get_session(session_id):
@@ -82,7 +80,6 @@ def get_session(session_id):
         'activeRequestCount': len(session['activeRequests'])
     })
 
-
 # Close a session
 @app.route('/sessions/<session_id>', methods=['DELETE'])
 def close_session(session_id):
@@ -93,12 +90,11 @@ def close_session(session_id):
     logger.info(f"Session {session_id} closed")
     return '', 204
 
-
 # REQUEST HANDLING
 
 # Process a request through the appropriate MCP server
 @app.route('/sessions/<session_id>/requests', methods=['POST'])
-async def handle_request(session_id):
+def handle_request(session_id):
     if session_id not in sessions:
         return jsonify({'error': 'Session not found'}), 404
 
@@ -125,7 +121,7 @@ async def handle_request(session_id):
 
     try:
         # Dispatch the request to the appropriate MCP server
-        response = await dispatcher.dispatch(request_data)
+        response = dispatcher.dispatch(request_data)
 
         # Remove the request from active tracking
         if request_id in session['activeRequests']:
@@ -164,7 +160,6 @@ async def handle_request(session_id):
             'message': str(e)
         }), 500
 
-
 # SSE NOTIFICATIONS
 
 # Subscribe to notifications
@@ -201,17 +196,15 @@ def events(client_id):
 
     return Response(stream(), mimetype='text/event-stream')
 
-
 # Function to send notification to a client
 def send_notification(client_id, notification):
     if client_id in sse_clients:
         # In a real implementation, this would use a proper async SSE framework
         # For simplicity in this example, we just log it
         logger.debug(f"Notification sent to client {client_id}",
-                     {'notificationType': notification.get('type')})
+                    {'notificationType': notification.get('type')})
         return True
     return False
-
 
 # SESSION CLEANUP
 
@@ -235,7 +228,6 @@ def cleanup_sessions():
                     'sessionId': session_id,
                     'timestamp': now.isoformat()
                 })
-
 
 # Start the cleanup thread
 cleanup_thread = threading.Thread(target=cleanup_sessions, daemon=True)
