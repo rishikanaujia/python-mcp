@@ -1,8 +1,11 @@
+# servers/database_server/app.py
+
 from flask import Flask, request, jsonify
 import json
 import os
 import sys
 from datetime import datetime
+import sqlite3
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -22,11 +25,12 @@ PORT = int(os.environ.get('PORT', 5004))
 SERVER_ID = os.environ.get('SERVER_ID', '4')
 CAPABILITIES = os.environ.get('CAPABILITIES', 'database').split(',')
 ENABLE_LOGGING = os.environ.get('ENABLE_DATABASE_LOGGING', 'true').lower() == 'true'
+DB_PATH = os.environ.get('SQLITE_DB_PATH', 'mcp.db')
 
 logger.info(f"Initializing MCP Server {SERVER_ID} with capabilities: {', '.join(CAPABILITIES)}")
 
 # Initialize database connector
-db_connector = DatabaseConnector()
+db_connector = DatabaseConnector(db_type='sqlite', db_path=DB_PATH)
 
 
 # Process request endpoint
@@ -137,6 +141,7 @@ def health_check():
         'timestamp': datetime.utcnow().isoformat(),
         'database': {
             'type': db_connector.db_type,
+            'path': db_connector.db_path,
             'status': db_status
         }
     })

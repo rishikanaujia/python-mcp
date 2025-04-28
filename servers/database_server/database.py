@@ -1,5 +1,4 @@
 import sqlite3
-import psycopg2
 import json
 import os
 import sys
@@ -15,25 +14,12 @@ logger = MCPLogger(service_name='database-server')
 class DatabaseConnector:
     """Database connector for MCP Database Server."""
 
-    def __init__(self):
+    def __init__(self, db_type='sqlite', db_path='mcp.db'):
         """Initialize the database connector."""
-        self.db_type = os.environ.get('DB_TYPE', 'sqlite')
+        self.db_type = db_type
+        self.db_path = db_path
         self.connection = None
         self.connected = False
-
-        # Database configuration
-        self.config = {
-            'sqlite': {
-                'db_path': os.environ.get('SQLITE_DB_PATH', 'mcp.db')
-            },
-            'postgres': {
-                'host': os.environ.get('DB_HOST', 'localhost'),
-                'port': os.environ.get('DB_PORT', '5432'),
-                'database': os.environ.get('DB_NAME', 'mcpdb'),
-                'user': os.environ.get('DB_USER', 'postgres'),
-                'password': os.environ.get('DB_PASSWORD', 'postgres')
-            }
-        }
 
     def connect(self):
         """Connect to the database."""
@@ -42,27 +28,18 @@ class DatabaseConnector:
 
         try:
             if self.db_type == 'sqlite':
-                self.connection = sqlite3.connect(self.config['sqlite']['db_path'])
+                self.connection = sqlite3.connect(self.db_path)
+                # Enable dictionary access to rows
                 self.connection.row_factory = sqlite3.Row
-            elif self.db_type == 'postgres':
-                config = self.config['postgres']
-                self.connection = psycopg2.connect(
-                    host=config['host'],
-                    port=config['port'],
-                    database=config['database'],
-                    user=config['user'],
-                    password=config['password']
-                )
+                self.connected = True
+                logger.info(f"Connected to SQLite database at {self.db_path}")
+
+                # Initialize database schema if needed
+                self._initialize_schema()
+
+                return True
             else:
                 raise ValueError(f"Unsupported database type: {self.db_type}")
-
-            self.connected = True
-            logger.info(f"Connected to {self.db_type} database")
-
-            # Initialize database schema if needed
-            self._initialize_schema()
-
-            return True
         except Exception as e:
             logger.error(f"Database connection error: {str(e)}")
             raise
@@ -91,13 +68,8 @@ class DatabaseConnector:
                 cursor.execute(query)
 
             if fetch:
-                if self.db_type == 'sqlite':
-                    # For SQLite with row_factory
-                    results = [dict(row) for row in cursor.fetchall()]
-                else:
-                    # For PostgreSQL
-                    columns = [desc[0] for desc in cursor.description] if cursor.description else []
-                    results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+                # For SQLite with row_factory
+                results = [dict(row) for row in cursor.fetchall()]
             else:
                 results = None
 
@@ -130,16 +102,10 @@ class DatabaseConnector:
     def _initialize_schema(self):
         """Initialize database schema if needed."""
         # Check if the tables exist
-        if self.db_type == 'sqlite':
-            tables_query = """
-                SELECT name FROM sqlite_master 
-                WHERE type='table' AND name='mcp_requests'
-            """
-        else:  # postgres
-            tables_query = """
-                SELECT tablename FROM pg_catalog.pg_tables
-                WHERE schemaname='public' AND tablename='mcp_requests'
-            """
+        tables_query = """
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='mcp_requests'
+        """
 
         result = self.execute_query(tables_query)
 
@@ -149,25 +115,42 @@ class DatabaseConnector:
             # Create tables
             self.execute_query("""
                 CREATE TABLE mcp_requests (
-                    id VARCHAR(100) PRIMARY KEY,
-                    request_type VARCHAR(50) NOT NULL,
+                    id TEXT PRIMARY KEY,
+                    request_type TEXT NOT NULL,
                     payload TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    client_id VARCHAR(100),
-                    session_id VARCHAR(100)
+                    client_id TEXT,
+                    session_id TEXT
                 )
             """, fetch=False)
 
             self.execute_query("""
                 CREATE TABLE mcp_responses (
-                    id VARCHAR(100) PRIMARY KEY,
-                    request_id VARCHAR(100) NOT NULL,
-                    status VARCHAR(20) NOT NULL,
+                    id TEXT PRIMARY KEY,
+                    request_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
                     data TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    server_id VARCHAR(20),
+                    server_id TEXT,
                     FOREIGN KEY (request_id) REFERENCES mcp_requests(id)
                 )
+            """, fetch=False)
+
+            # Create indexes for better performance
+            self.execute_query("""
+                CREATE INDEX idx_mcp_requests_client_id ON mcp_requests(client_id);
+            """, fetch=False)
+
+            self.execute_query("""
+                CREATE INDEX idx_mcp_requests_session_id ON mcp_requests(session_id);
+            """, fetch=False)
+
+            self.execute_query("""
+                CREATE INDEX idx_mcp_requests_type ON mcp_requests(request_type);
+            """, fetch=False)
+
+            self.execute_query("""
+                CREATE INDEX idx_mcp_responses_request_id ON mcp_responses(request_id);
             """, fetch=False)
 
             logger.info("Database schema initialized")
@@ -179,8 +162,9 @@ class DatabaseConnector:
 
         request_id = request_data.get('id')
         request_type = request_data.get('type')
-        client_id = request_data.get('metadata', {}).get('source')
-        session_id = request_data.get('metadata', {}).get('sessionId')
+        metadata = request_data.get('metadata', {})
+        client_id = metadata.get('source')
+        session_id = metadata.get('sessionId')
 
         # Convert payload to JSON string
         payload_json = json.dumps(request_data.get('payload', {}))
@@ -189,9 +173,6 @@ class DatabaseConnector:
             INSERT INTO mcp_requests (id, request_type, payload, client_id, session_id)
             VALUES (?, ?, ?, ?, ?)
         """
-
-        if self.db_type == 'postgres':
-            query = query.replace('?', '%s')
 
         self.execute_query(
             query,
@@ -209,9 +190,8 @@ class DatabaseConnector:
         response_id = response_data.get('id')
         request_id = response_data.get('requestId')
         status = response_data.get('status')
-        server_id = response_data.get('metadata', {}).get('source', '').split('-')[-1] if response_data.get('metadata',
-                                                                                                            {}).get(
-            'source') else None
+        metadata = response_data.get('metadata', {})
+        server_id = metadata.get('source', '').split('-')[-1] if metadata.get('source') else None
 
         # Convert data to JSON string
         data_json = json.dumps(response_data.get('data', {}))
@@ -220,9 +200,6 @@ class DatabaseConnector:
             INSERT INTO mcp_responses (id, request_id, status, data, server_id)
             VALUES (?, ?, ?, ?, ?)
         """
-
-        if self.db_type == 'postgres':
-            query = query.replace('?', '%s')
 
         self.execute_query(
             query,
@@ -267,12 +244,8 @@ class DatabaseConnector:
 
         # Query for total count
         count_query = f"SELECT COUNT(*) as count FROM mcp_requests{where_clause}"
-
-        if self.db_type == 'postgres':
-            count_query = count_query.replace('?', '%s')
-
         count_result = self.execute_query(count_query, query_params)
-        total_count = count_result['results'][0]['count']
+        total_count = count_result['results'][0]['count'] if count_result['results'] else 0
 
         # Query for requests with pagination
         query = f"""
@@ -284,9 +257,6 @@ class DatabaseConnector:
             ORDER BY r.created_at DESC
             LIMIT {limit} OFFSET {offset}
         """
-
-        if self.db_type == 'postgres':
-            query = query.replace('?', '%s')
 
         result = self.execute_query(query, query_params)
 
