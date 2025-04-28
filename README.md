@@ -120,40 +120,146 @@ python servers/tools_server/app.py
 
 ## Directory Structure
 
+```# Python MCP Complete Directory Structure
+
 ```
 python-mcp/
-├── docker-compose.yml
-├── requirements.txt
-├── client/
-│   ├── app.py                # Main client application
-│   ├── llm.py                # LLM interface
-│   ├── stdio_handler.py      # Standard I/O handler
-│   ├── sse_client.py         # SSE client for notifications
-│   ├── templates/            # HTML templates
-│   └── static/               # Static assets (CSS, JS)
 │
-├── session_manager/
-│   ├── app.py                # Main session manager
-│   ├── dispatcher.py         # Request dispatcher
-│   └── ...
+├── README.md                        # Project overview and documentation
+├── setup-mcp.sh                     # Setup script to create all files
+├── requirements.txt                 # Main project dependencies
+├── docker-compose.yml               # Docker configuration for all services
 │
-├── servers/
-│   ├── resources_server/     # Server 1: Resources
-│   ├── sampling_server/      # Server 2: Sampling
-│   ├── tools_server/         # Server 3: Tools
-│   │   ├── tools/
-│   │   │   ├── calculator.py
-│   │   │   ├── text_processor.py
-│   │   │   └── data_transformer.py
-│   ├── database_server/      # Server 4: Database
-│   ├── internet_server/      # Server 5: Internet
-│   ├── roots_server/         # Server 6: Roots
-│   └── prompts_server/       # Server 7: Prompts
+├── common/                          # Shared utilities across all components
+│   ├── __init__.py
+│   ├── protocol.py                  # MCP Protocol implementation
+│   ├── logging_utils.py             # Logging utilities
+│   └── error_handling.py            # Error handling utilities
 │
-└── common/
-    ├── protocol.py           # MCP Protocol implementation
-    ├── logging_utils.py      # Logging utilities
-    └── error_handling.py     # Error handling utilities
+├── client/                          # MCP Client implementation
+│   ├── Dockerfile                   # Client container configuration
+│   ├── requirements.txt             # Client-specific dependencies
+│   ├── app.py                       # Main client application
+│   ├── llm.py                       # LLM interface
+│   ├── stdio_handler.py             # Standard I/O handler
+│   ├── sse_client.py                # SSE client for notifications
+│   ├── templates/                   # HTML templates
+│   │   └── index.html               # Main client UI template
+│   └── static/                      # Static assets
+│       ├── styles.css               # CSS styles
+│       └── client.js                # Client-side JavaScript
+│
+├── session_manager/                 # Session Manager implementation
+│   ├── Dockerfile                   # Session manager container config
+│   ├── requirements.txt             # Session manager dependencies
+│   ├── app.py                       # Main session manager application
+│   ├── dispatcher.py                # Request dispatcher
+│   ├── session.py                   # Session management
+│   └── notifications.py             # SSE notifications handler
+│
+├── servers/                         # MCP Servers implementation
+│   │
+│   ├── resources_server/            # Server 1: Resources
+│   │   ├── Dockerfile               # Server container configuration
+│   │   ├── requirements.txt         # Server dependencies
+│   │   ├── app.py                   # Main server application
+│   │   └── resources.py             # Resources implementation
+│   │
+│   ├── sampling_server/             # Server 2: Sampling
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   ├── app.py
+│   │   └── sampling.py              # Sampling implementation
+│   │
+│   ├── tools_server/                # Server 3: Tools
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   ├── app.py
+│   │   └── tools/                   # Tool implementations
+│   │       ├── __init__.py
+│   │       ├── calculator.py        # Calculator tool
+│   │       ├── text_processor.py    # Text processor tool
+│   │       └── data_transformer.py  # Data transformer tool
+│   │
+│   ├── database_server/             # Server 4: Database
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   ├── app.py
+│   │   └── database.py              # Database connector
+│   │
+│   ├── internet_server/             # Server 5: Internet
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   ├── app.py
+│   │   └── internet.py              # Internet connector
+│   │
+│   ├── roots_server/                # Server 6: Roots
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   ├── app.py
+│   │   └── roots.py                 # Roots implementation
+│   │
+│   └── prompts_server/              # Server 7: Prompts
+│       ├── Dockerfile
+│       ├── requirements.txt
+│       ├── app.py
+│       └── prompts.py               # Prompts implementation
+│
+└── docs/                            # Additional documentation
+    ├── architecture.md              # Architecture details
+    ├── api_reference.md             # API documentation
+    ├── development_guide.md         # Development guidelines
+    └── troubleshooting.md           # Troubleshooting guide
+```
+
+## File Content Summary
+
+### Common Files
+
+- **protocol.py**: Implements the MCP Protocol with methods for creating and validating requests, responses, and notifications
+- **logging_utils.py**: Provides consistent logging across all components
+- **error_handling.py**: Defines error classes and handling utilities
+
+### Client Files
+
+- **app.py**: Main Flask application with REST API endpoints and web UI
+- **llm.py**: Interface for integrating with language models
+- **stdio_handler.py**: Handles standard input/output operations
+- **sse_client.py**: Manages Server-Sent Events (SSE) for notifications
+- **index.html**: Web interface for client interaction
+- **client.js**: Client-side logic for the web interface
+
+### Session Manager Files
+
+- **app.py**: Main Flask application for session management and request routing
+- **dispatcher.py**: Routes requests to appropriate MCP servers
+- **session.py**: Manages client sessions
+- **notifications.py**: Handles SSE notifications to clients
+
+### Server Files
+
+Each server has:
+- **app.py**: Main Flask application with request processing logic
+- **[capability].py**: Implementation of the server's specific capability
+
+### Tools Server Files
+
+- **calculator.py**: Implementation of calculator functions
+- **text_processor.py**: Implementation of text processing functions
+- **data_transformer.py**: Implementation of data transformation functions
+
+## Docker Configuration
+
+- **docker-compose.yml**: Configures all services (client, session manager, servers, database)
+- **Dockerfile** (in each component): Specifies container configuration
+
+## Documentation
+
+- **README.md**: Project overview and getting started guide
+- **architecture.md**: Detailed explanation of MCP architecture
+- **api_reference.md**: Documentation of all API endpoints
+- **development_guide.md**: Guidelines for development and extension
+- **troubleshooting.md**: Common issues and solutions
 ```
 
 ## Extending the System
