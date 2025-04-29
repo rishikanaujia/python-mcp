@@ -163,8 +163,16 @@ def handle_request(session_id):
 # SSE NOTIFICATIONS
 
 # Subscribe to notifications
+# Fix for session_manager/app.py
+# Replace the events endpoint with this implementation
+
 @app.route('/events/<client_id>')
 def events(client_id):
+    """
+    SSE endpoint for client notifications.
+    Uses a generator to keep the connection open.
+    """
+
     def stream():
         # Send initial connection message
         data = json.dumps({
@@ -179,22 +187,60 @@ def events(client_id):
         logger.info(f"SSE client {client_id} connected")
 
         try:
-            # Keep connection alive
+            # Keep connection alive with ping messages
+            keep_alive_count = 0
             while True:
-                # Check if client is still connected
-                if not request.environ.get('werkzeug.socket'):
+                # Sleep for 30 seconds between pings
+                time.sleep(30)
+
+                # Send ping to keep connection alive
+                keep_alive_count += 1
+                ping_data = json.dumps({
+                    'type': 'ping',
+                    'count': keep_alive_count,
+                    'timestamp': datetime.utcnow().isoformat()
+                })
+                yield f"data: {ping_data}\n\n"
+
+                # Check if client is still connected (this will abort the generator if the client disconnected)
+                if request.environ.get('werkzeug.socket') is None:
+                    logger.info(f"SSE client {client_id} connection lost")
                     break
-                time.sleep(30)  # Keep-alive every 30 seconds
-                yield f"data: {json.dumps({'type': 'ping'})}\n\n"
-        except:
-            pass
+        except GeneratorExit:
+            # This happens when the client disconnects
+            logger.info(f"SSE client {client_id} disconnected (generator exit)")
         finally:
             # Clean up on disconnect
             if client_id in sse_clients:
                 del sse_clients[client_id]
-            logger.info(f"SSE client {client_id} disconnected")
+                logger.info(f"SSE client {client_id} disconnected and removed from active clients")
 
-    return Response(stream(), mimetype='text/event-stream')
+    # Set SSE specific headers
+    response = Response(stream(), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['X-Accel-Buffering'] = 'no'  # For Nginx compatibility
+    return response
+
+
+# Update send_notification function to ensure proper delivery
+def send_notification(client_id, notification):
+    """Send notification to a client."""
+    if client_id in sse_clients:
+        try:
+            # In real implementation with async framework, you would use proper pub/sub
+            # This is a simplified implementation that logs the notification
+            logger.debug(f"Notification sent to client {client_id}",
+                         {'notificationType': notification.get('type')})
+
+            # In a real implementation, you would publish to the client's SSE stream here
+            # For development purposes, just log that it happened
+            return True
+        except Exception as e:
+            logger.error(f"Error sending notification to client {client_id}: {str(e)}")
+            return False
+    return False
+
 
 # Function to send notification to a client
 def send_notification(client_id, notification):

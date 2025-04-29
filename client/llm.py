@@ -13,6 +13,7 @@ class LLMInterface:
     def __init__(self):
         self.api_key = os.environ.get('LLM_API_KEY')
         self.api_url = os.environ.get('LLM_API_URL')
+        logger.error(f'{self.api_key}, {self.api_url}')
         self.initialized = False
         self.status = 'disconnected'
 
@@ -42,6 +43,8 @@ class LLMInterface:
 
         return {'status': self.status}
 
+    # Update the process method in client/llm.py
+
     def process(self, prompt):
         """Process a prompt through the LLM."""
         if not self.initialized:
@@ -52,26 +55,58 @@ class LLMInterface:
         # If using external LLM
         if self.status == 'connected':
             try:
-                headers = {
-                    'Authorization': f"Bearer {self.api_key}",
-                    'Content-Type': 'application/json'
-                }
+                # Detect if it's an Anthropic API by checking the URL
+                is_anthropic = 'anthropic.com' in self.api_url.lower()
 
-                payload = {
-                    'prompt': prompt,
-                    'max_tokens': 1000,
-                    'temperature': 0.7
-                }
+                if is_anthropic:
+                    # Anthropic Claude API format
+                    headers = {
+                        'x-api-key': self.api_key,  # Anthropic uses x-api-key not Authorization
+                        'Content-Type': 'application/json',
+                        'anthropic-version': '2023-06-01'  # Include API version
+                    }
 
+                    payload = {
+                        'model': 'claude-3-opus-20240229',  # Use an appropriate Claude model
+                        'messages': [
+                            {'role': 'user', 'content': prompt}
+                        ],
+                        'max_tokens': 1000
+                    }
+                else:
+                    # OpenAI or other API format (default)
+                    headers = {
+                        'Authorization': f"Bearer {self.api_key}",
+                        'Content-Type': 'application/json'
+                    }
+
+                    payload = {
+                        'model': 'gpt-4',  # Default to GPT-4 for OpenAI
+                        'messages': [
+                            {'role': 'user', 'content': prompt}
+                        ],
+                        'max_tokens': 1000,
+                        'temperature': 0.7
+                    }
+
+                # Make the API request
                 response = requests.post(self.api_url, json=payload, headers=headers)
 
                 if response.status_code != 200:
-                    raise Exception(f"LLM API error: {response.text}")
+                    error_msg = f"LLM API error: {response.text}"
+                    logger.error(error_msg)
+                    raise Exception(error_msg)
 
                 result = response.json()
                 logger.info('Received response from LLM API')
 
-                return {'result': result['choices'][0]['text'].strip()}
+                # Extract the response text based on API type
+                if is_anthropic:
+                    response_text = result['content'][0]['text']
+                else:
+                    response_text = result['choices'][0]['message']['content']
+
+                return {'result': response_text}
 
             except Exception as e:
                 logger.error(f'LLM API error: {str(e)}')
